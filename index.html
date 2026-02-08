@@ -1,0 +1,886 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Resizer Tools</title>
+    
+    <link rel="icon" type="image/png" href="image.png">
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+    <style>
+        /* --- CSS STYLES --- */
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
+        
+        body { 
+            background-color: #f4f7f6; 
+            display: flex; flex-direction: column; min-height: 100vh;
+            padding-top: 80px; 
+        }
+
+        /* NAVBAR */
+        .navbar {
+            display: flex; justify-content: space-between; align-items: center;
+            background-color: #2c3e50; padding: 0 5%; color: white; 
+            position: fixed; top: 0; left: 0; width: 100%; z-index: 1000;
+            height: 60px; 
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        /* LOGO STYLES */
+        .logo { 
+            display: flex; align-items: center; gap: 10px; 
+            font-weight: bold; font-size: 24px; cursor: pointer;
+            color: white; text-decoration: none;
+        }
+        .logo img { 
+            height: 60px; width: auto; display: block; object-fit: contain;
+            padding: 5px; background-color: rgba(255, 255, 255, 0.1); 
+            border-radius: 8px; transition: 0.3s;
+        }
+        .logo:hover img { background-color: rgba(255, 255, 255, 0.2); }
+
+        /* NAV LINKS */
+        .nav-links { display: flex; list-style: none; align-items: center; gap: 0; }
+        .nav-links li { position: relative; border-right: 1px solid rgba(255, 255, 255, 0.2); }
+        .nav-links li:last-child, #nav-login-li, #nav-signup-li { border-right: none; }
+        
+        .nav-links a { 
+            color: white; text-decoration: none; font-size: 16px; font-weight: 500;
+            transition: all 0.3s ease; cursor: pointer; padding: 10px 20px; display: block;
+        }
+        .nav-links a:hover, .nav-links a.active-link { 
+            color: #ff9f43; background-color: rgba(255, 255, 255, 0.05); font-weight: bold;
+        }
+
+        /* SCROLLING TEXT */
+        .scroll-container {
+            width: 100%; overflow: hidden; background-color: black; color: white;
+            padding: 12px 0; margin-bottom: 5px; 
+            border-radius: 5px;
+            white-space: nowrap; box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            border-left: 5px solid red;
+        }
+        .scroll-text {
+            display: inline-block; font-size: 18px; font-weight: bold;
+            padding-left: 100%; animation: scroll-left 40s linear infinite;
+        }
+        @keyframes scroll-left { 0% { transform: translateX(0); } 100% { transform: translateX(-100%); } }
+
+        /* PRIVACY TEXT STYLE */
+        .privacy-text {
+            color: #c0392b; font-weight: bold; font-size: 14px; 
+            text-align: center; margin-bottom: 20px; padding: 10px;
+            background-color: #fadbd8; border: 1px solid #e6b0aa; border-radius: 4px;
+            display: none; /* Hidden initially */
+        }
+
+        /* GENERAL CONTAINER */
+        .content-wrapper { flex: 1; width: 100%; }
+        .tool-section { display: none; animation: fadeIn 0.5s; }
+        .tool-section.active-tool { display: block; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        .tool-container {
+            max-width: 1200px; margin: 40px auto; text-align: center;
+            background: white; padding: 30px; border-radius: 10px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        }
+
+        .upload-area {
+            display: flex; justify-content: center; align-items: center; gap: 20px;
+            padding: 20px; border: 2px dashed #ddd; border-radius: 8px;
+            background-color: #fafafa; margin-bottom: 20px;
+        }
+        .btn-main { border: none; color: white; background-color: #007bff; padding: 12px 30px; border-radius: 5px; cursor: pointer; font-weight: bold; }
+        .upload-btn-wrapper { position: relative; overflow: hidden; display: inline-block; }
+        .upload-btn-wrapper input[type=file] { position: absolute; left: 0; top: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+
+        .editor-panel { display: none; margin-top: 20px; border-top: 1px solid #eee; padding-top: 20px; }
+        .split-main-layout { display: flex; gap: 25px; align-items: flex-start; margin-top: 20px; }
+        .workspace-box, .img-box { flex: 1; min-width: 0; }
+        
+        .img-wrapper {
+            background-image: linear-gradient(45deg, #ccc 25%, transparent 25%), linear-gradient(-45deg, #ccc 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #ccc 75%), linear-gradient(-45deg, transparent 75%, #ccc 75%);
+            background-size: 20px 20px; display: inline-block; border-radius: 4px; overflow: hidden; width: 100%;
+        }
+        .img-box img, .img-wrapper img, .crop-container img { max-width: 100%; height: auto; max-height: 500px; display: block; margin: 0 auto; }
+        .crop-container { width: 100%; max-height: 500px; background-color: #333; margin-bottom: 20px; border-radius: 8px; overflow: hidden; display: flex; justify-content: center; align-items: center; }
+
+        .controls { display: flex; justify-content: center; gap: 15px; margin-bottom: 20px; background: #f8f9fa; padding: 20px; border-radius: 8px; flex-wrap: wrap; align-items: center; }
+        .input-group label { display: block; margin-bottom: 5px; font-size: 14px; font-weight: 600; }
+        .input-group input, .input-group select { padding: 10px; width: 140px; border: 1px solid #ccc; border-radius: 4px; text-align: center; }
+        
+        .range-container { display: flex; align-items: center; gap: 10px; }
+        .range-slider { width: 180px; cursor: pointer; }
+
+        /* ACTION BUTTONS (50% WIDTH & CENTERED) */
+        .action-buttons-row { 
+            display: flex; gap: 15px; margin-top: 15px; 
+            width: 50%; margin-left: auto; margin-right: auto; justify-content: center; 
+        }
+        
+        /* SMALLER BUTTONS */
+        .btn-reupload { background: #6c757d; color: white; border: none; padding: 8px 15px; font-size: 14px; border-radius: 5px; cursor: pointer; font-weight: bold; flex: 1; }
+        .btn-action-large { background: #e67e22; padding: 8px 15px; font-size: 14px; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; flex: 1; }
+        .btn-download { background-color: #28a745; color: white; padding: 8px 15px; font-size: 14px; text-decoration: none; border-radius: 5px; display: inline-block; margin-top: 10px; font-weight: bold; }
+        .btn-rotate { background-color: #8e44ad; color: white; border: none; padding: 8px 12px; border-radius: 5px; cursor: pointer; font-size: 14px; }
+        .btn-rotate:hover { background-color: #732d91; }
+
+        .btn-nav-login { border: 1px solid rgba(255,255,255,0.5); padding: 8px 20px !important; border-radius: 5px; margin-left: 10px; }
+        .btn-nav-login:hover { background-color: rgba(255,255,255,0.1) !important; border-color: white; color: #ff9f43 !important; }
+        .btn-nav-signup { background-color: #3498db; padding: 8px 20px !important; border-radius: 5px; font-weight: bold; border: none; margin-left: 5px; }
+        .btn-nav-signup:hover { background-color: #2980b9 !important; color: white !important; }
+
+        /* DROPDOWN */
+        .dropdown .dropbtn { cursor: pointer; display: flex; align-items: center; }
+        .dropdown-content { display: none; position: absolute; background-color: #34495e; min-width: 180px; box-shadow: 0 8px 16px rgba(0,0,0,0.2); z-index: 1001; top: 100%; left: 0; border-radius: 0 0 4px 4px; }
+        .dropdown-content li { padding: 0; display: block; width: 100%; border-right: none; border-bottom: 1px solid rgba(255,255,255,0.1); }
+        .dropdown-content a { color: white; padding: 12px 16px; display: block; font-size: 14px; text-align: left; }
+        .dropdown-content a:hover { background-color: #2c3e50; color: #ff9f43; }
+        .dropdown:hover .dropdown-content { display: block; }
+
+        .burger { display: none; cursor: pointer; }
+        .burger div { width: 25px; height: 3px; background-color: white; margin: 5px; }
+
+        @media screen and (max-width: 850px) {
+            .nav-links { position: absolute; right: 0; height: calc(100vh - 80px); top: 80px; background-color: #2c3e50; display: flex; flex-direction: column; align-items: center; width: 60%; transform: translateX(100%); transition: 0.4s; overflow-y: auto; gap: 0; padding-top: 30px; }
+            .nav-links li { border-right: none; border-bottom: 1px solid rgba(255,255,255,0.1); width: 100%; text-align: center; }
+            .nav-active { transform: translateX(0%); }
+            .btn-nav-login, .btn-nav-signup { display: block; width: 80%; margin: 10px auto; }
+            .dropdown-content { position: static; box-shadow: none; background-color: #22303f; width: 100%; display: none; }
+            .dropdown:hover .dropdown-content { display: block; }
+            .burger { display: block; }
+            .action-buttons-row { width: 95%; } 
+        }
+
+        /* MODAL */
+        .modal { display: none; position: fixed; z-index: 2000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); justify-content: center; align-items: center; }
+        .modal-content { background-color: white; padding: 30px; border-radius: 10px; width: 90%; max-width: 400px; text-align: center; position: relative; animation: slideDown 0.3s ease; }
+        @keyframes slideDown { from {transform: translateY(-50px); opacity: 0;} to {transform: translateY(0); opacity: 1;} }
+        .close-modal { position: absolute; top: 10px; right: 15px; font-size: 24px; cursor: pointer; color: #aaa; }
+        .form-input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 5px; }
+        .btn-auth-submit { width: 100%; padding: 12px; background: #3498db; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; font-weight: bold; }
+        
+        .color-display { width: 50px; height: 50px; border-radius: 50%; border: 3px solid #ddd; display: inline-block; }
+        #meme-canvas { cursor: move; }
+
+        .footer { background-color: #2c3e50; color: #ecf0f1; text-align: center; padding: 20px; margin-top: auto; font-size: 14px; }
+        .unit-toggle-wrapper { background-color: #eef2f5; padding: 4px; border-radius: 8px; display: flex; width: 220px; position: relative; cursor: pointer; border: 1px solid #dee2e6; }
+        .unit-option { flex: 1; text-align: center; padding: 8px 0; font-size: 14px; font-weight: 600; color: #6c757d; z-index: 2; position: relative; }
+        .unit-option.active { color: #007bff; }
+        .unit-slider-bg { position: absolute; top: 4px; left: 4px; width: 50%; height: calc(100% - 8px); background-color: white; border-radius: 6px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); transition: transform 0.3s; z-index: 1; }
+        .unit-toggle-wrapper[data-state="percentage"] .unit-slider-bg { transform: translateX(100%); left: -4px; }
+        .size-badge { background-color: #e8f5e9; color: #2e7d32; padding: 5px 10px; border-radius: 4px; font-weight: bold; font-size: 13px; display: inline-block; margin-top: 5px; border: 1px solid #c8e6c9; }
+    </style>
+</head>
+<body>
+
+    <nav class="navbar">
+        <a href="#" class="logo" onclick="location.reload()">
+            <img src="image.png" alt="Logo" style="height: 60px; width: auto;">
+            <span>Image Resizer</span>
+        </a>
+
+        <ul class="nav-links">
+            <li><a onclick="switchTool('resizer')" class="active-link" id="link-resizer">Image Resizer</a></li>
+            <li><a onclick="switchTool('crop')" id="link-crop">Crop Image</a></li>
+            <li><a onclick="switchTool('convert')" id="link-convert">Image Converter</a></li>
+            
+            <li class="dropdown">
+                <a class="dropbtn">More Tools ▾</a>
+                <ul class="dropdown-content">
+                    <li><a onclick="switchTool('compress')">Compress Image</a></li>
+                    <li><a onclick="switchTool('meme')">Meme Generator</a></li>
+                    <li><a onclick="switchTool('filters')">Image Filters</a></li>
+                    <li><a onclick="switchTool('color')">Color Picker</a></li>
+                </ul>
+            </li>
+
+            <li id="nav-login-li"><a class="btn-nav-login" onclick="openModal('login')">Login</a></li>
+            <li id="nav-signup-li"><a class="btn-nav-signup" onclick="openModal('signup')">Sign Up</a></li>
+            <li id="nav-profile-li" style="display:none;"><a style="color: #2ecc71; font-weight: bold;">👤 My Profile</a></li>
+        </ul>
+        <div class="burger"><div class="line1"></div><div class="line2"></div><div class="line3"></div></div>
+    </nav>
+
+    <main class="content-wrapper">
+        
+        <div id="tool-resizer" class="tool-section active-tool">
+            <div class="tool-container">
+                <h1>Image Resizer</h1>
+                <div class="scroll-container">
+                    <div class="scroll-text">Change the Width and Height of your photo easily. Perfect for resizing images for social media, resumes, or online forms without losing much quality.</div>
+                </div>
+                
+                <div id="resizer-privacy-msg" class="privacy-text">⚠️ Privacy Mode: Your photo will be automatically refreshed/cleared in 2 mins after upload!</div>
+
+                <div class="upload-area" id="resizer-upload-area">
+                    <div class="upload-btn-wrapper"><button class="btn-main">Select Image</button><input type="file" onchange="loadResizer(this)" accept="image/*"></div>
+                </div>
+                <div class="editor-panel" id="resizer-editor-panel">
+                    <div class="controls">
+                        <div class="input-group">
+                            <label>Unit Mode</label>
+                            <div class="unit-toggle-wrapper" id="unit-toggle" data-state="pixels" onclick="toggleUnit()">
+                                <div class="unit-slider-bg"></div>
+                                <div class="unit-option active" id="btn-px">Pixels</div>
+                                <div class="unit-option" id="btn-percent">Percent</div>
+                            </div>
+                        </div>
+                        <div class="input-group"><label>Width</label><input type="number" id="width-input" oninput="updateDims('width'); updateResizerLive();"></div>
+                        <div class="input-group"><label>Height</label><input type="number" id="height-input" oninput="updateDims('height'); updateResizerLive();"></div>
+                        <div class="input-group" style="min-width: 200px;">
+                            <label>Quality / Size (Live)</label>
+                            <div class="range-container">
+                                <input type="range" id="resizer-quality" class="range-slider" min="0.1" max="1" step="0.05" value="0.9" oninput="updateResizerLive()">
+                                <span id="resizer-q-val" style="font-weight:bold; min-width: 40px; text-align: left;">90%</span>
+                            </div>
+                        </div>
+                        <div class="input-group">
+                            <label>Rotate</label>
+                            <div style="display:flex; gap:5px;">
+                                <button class="btn-rotate" onclick="rotateResizer(-90)">↺</button>
+                                <button class="btn-rotate" onclick="rotateResizer(90)">↻</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="action-buttons-row">
+                        <button class="btn-reupload" onclick="resetTool('resizer')">⬆ Re-upload</button>
+                        <button class="btn-action-large" onclick="processResize(true)">Download Resized Image</button>
+                    </div>
+                    <div class="split-main-layout">
+                        <div class="workspace-box">
+                            <div class="img-wrapper"><img id="resizer-preview" src=""></div>
+                            <div id="original-size-display" class="size-badge">Original: Waiting...</div>
+                        </div>
+                        <div class="img-box" id="resizer-result" style="display:block;">
+                            <h3>Live Preview</h3>
+                            <div class="img-wrapper"><img id="resizer-output" src=""></div>
+                            <div id="resized-size-display" class="size-badge">New Size: Calculating...</div>
+                            <br><a id="resizer-dl" class="btn-download" download="resized.jpg" style="display:none;">Download</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="tool-crop" class="tool-section">
+            <div class="tool-container">
+                <h1>Crop Image</h1>
+                <div class="scroll-container">
+                    <div class="scroll-text">Cut out unwanted parts of your image. Drag the frame to select the area you want to keep and download the cropped version instantly.</div>
+                </div>
+                
+                <div id="crop-privacy-msg" class="privacy-text">⚠️ Privacy Mode: Your photo will be automatically refreshed/cleared in 2 mins after upload!</div>
+
+                <div class="upload-area" id="crop-upload-area">
+                    <div class="upload-btn-wrapper"><button class="btn-main">Select Image</button><input type="file" onchange="loadCropper(this)" accept="image/*"></div>
+                </div>
+                <div class="editor-panel" id="crop-editor-panel">
+                    <div class="controls">
+                        <button class="btn-main" style="padding: 5px 10px;" onclick="cropper.rotate(-90)">↺ Left</button>
+                        <button class="btn-main" style="padding: 5px 10px;" onclick="cropper.rotate(90)">↻ Right</button>
+                    </div>
+                    <div class="split-main-layout">
+                        <div class="workspace-box">
+                            <div class="crop-container"><img id="image-to-crop" src=""></div>
+                            <div class="action-buttons-row">
+                                <button class="btn-reupload" onclick="resetTool('crop')">⬆ Re-upload</button>
+                                <button class="btn-action-large" onclick="processCrop()">Crop & Preview >></button>
+                            </div>
+                        </div>
+                        <div class="img-box" id="crop-result" style="display:none;">
+                            <h3>Cropped Output</h3>
+                            <div class="img-wrapper"><img id="crop-output" src=""></div>
+                            <br><a id="crop-dl" class="btn-download" download="cropped.jpg">Download</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="tool-convert" class="tool-section">
+            <div class="tool-container">
+                <h1>Image Converter</h1>
+                <div class="scroll-container">
+                    <div class="scroll-text">Convert your photos to different formats like JPEG, PNG, WEBP, or even PDF. Fast conversion with adjustable quality settings for the best output.</div>
+                </div>
+                
+                <div id="convert-privacy-msg" class="privacy-text">⚠️ Privacy Mode: Your photo will be automatically refreshed/cleared in 2 mins after upload!</div>
+
+                <div class="upload-area" id="convert-upload-area">
+                    <div class="upload-btn-wrapper"><button class="btn-main">Select Image</button><input type="file" onchange="loadConvert(this)" accept="image/*"></div>
+                </div>
+                <div class="editor-panel" id="convert-editor-panel">
+                    <div class="controls">
+                        <div class="input-group">
+                            <label>Format</label>
+                            <select id="convert-format" onchange="updateConverterLive()">
+                                <option value="jpeg">JPG</option>
+                                <option value="png">PNG</option>
+                                <option value="webp">WEBP</option>
+                                <option value="pdf">PDF</option>
+                            </select>
+                        </div>
+                        <div class="input-group" style="min-width: 200px;">
+                            <label>Quality / Size</label>
+                            <div class="range-container">
+                                <input type="range" id="convert-quality" class="range-slider" min="0.1" max="1" step="0.05" value="0.92" oninput="updateConverterLive()">
+                                <span id="convert-q-val" style="font-weight:bold; min-width: 40px; text-align: left;">92%</span>
+                            </div>
+                        </div>
+                        <div class="input-group">
+                            <label>Rotate</label>
+                            <div style="display:flex; gap:5px;">
+                                <button class="btn-rotate" onclick="rotateConverter(-90)">↺</button>
+                                <button class="btn-rotate" onclick="rotateConverter(90)">↻</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="split-main-layout">
+                        <div class="workspace-box">
+                            <div class="img-wrapper"><img id="convert-preview" src=""></div>
+                            <div class="action-buttons-row">
+                                <button class="btn-reupload" onclick="resetTool('convert')">⬆ Re-upload</button>
+                                <button class="btn-action-large" onclick="document.getElementById('convert-dl').click()">Download File</button>
+                            </div>
+                        </div>
+                        <div class="img-box" id="convert-result" style="display:block;">
+                            <h3>Live Preview</h3>
+                            <div class="img-wrapper"><img id="convert-output" src="" alt="Output"></div>
+                            <div id="convert-size-display" class="size-badge">Est. Size: Calculating...</div>
+                            <br><a id="convert-dl" class="btn-download" download="converted.jpg" style="display:none;">Download</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="tool-compress" class="tool-section">
+            <div class="tool-container">
+                <h1>Image Compressor</h1>
+                <div class="scroll-container">
+                    <div class="scroll-text">Shrink the file size of your images in seconds. Reduce KB/MB size for faster uploads while maintaining visible image quality.</div>
+                </div>
+                
+                <div id="compress-privacy-msg" class="privacy-text">⚠️ Privacy Mode: Your photo will be automatically refreshed/cleared in 2 mins after upload!</div>
+
+                <div class="upload-area" id="compress-upload-area">
+                    <div class="upload-btn-wrapper"><button class="btn-main">Select Image</button><input type="file" onchange="loadCompress(this)" accept="image/*"></div>
+                </div>
+                <div class="editor-panel" id="compress-editor-panel">
+                    <div class="controls">
+                        <div class="input-group">
+                            <label>Quality (1% - 100%)</label>
+                            <div class="range-container">
+                                <input type="range" id="compress-quality" class="range-slider" min="0.01" max="1" step="0.01" value="0.6" oninput="document.getElementById('q-val').innerText = Math.round(this.value*100)+'%'">
+                                <span id="q-val" style="font-weight:bold; min-width: 40px; text-align: left;">60%</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="split-main-layout">
+                        <div class="workspace-box">
+                            <div class="img-wrapper"><img id="compress-preview" src=""></div>
+                            <div class="action-buttons-row">
+                                <button class="btn-reupload" onclick="resetTool('compress')">⬆ Re-upload</button>
+                                <button class="btn-action-large" onclick="processCompress()">Compress Now >></button>
+                            </div>
+                        </div>
+                        <div class="img-box" id="compress-result" style="display:none;">
+                            <h3>Compressed Result</h3>
+                            <div class="img-wrapper"><img id="compress-output" src=""></div>
+                            <p id="compress-size" style="color:green; font-weight:bold; margin-top:5px;"></p>
+                            <a id="compress-dl" class="btn-download" download="compressed.jpg">Download</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="tool-meme" class="tool-section">
+            <div class="tool-container">
+                <h1>Meme Generator</h1>
+                <div class="scroll-container">
+                    <div class="scroll-text">Create custom memes by adding captions to your images. Move text around and customize it to make the perfect viral meme.</div>
+                </div>
+                
+                <div id="meme-privacy-msg" class="privacy-text">⚠️ Privacy Mode: Your photo will be automatically refreshed/cleared in 2 mins after upload!</div>
+
+                <div class="upload-area" id="meme-upload-area">
+                    <div class="upload-btn-wrapper"><button class="btn-main">Select Image</button><input type="file" onchange="loadMeme(this)" accept="image/*"></div>
+                </div>
+                <div class="editor-panel" id="meme-editor-panel">
+                    <div class="controls">
+                        <div class="input-group"><label>Top Text</label><input type="text" id="meme-top" placeholder="Enter Top Text" oninput="drawMeme()"></div>
+                        <div class="input-group"><label>Bottom Text</label><input type="text" id="meme-bottom" placeholder="Enter Bottom Text" oninput="drawMeme()"></div>
+                    </div>
+                    <div class="action-buttons-row">
+                        <button class="btn-reupload" onclick="resetTool('meme')">⬆ Re-upload</button>
+                        <button class="btn-action-large" onclick="downloadMeme()">Download Meme</button>
+                    </div>
+                    <div class="img-wrapper" style="margin-top:20px;">
+                        <canvas id="meme-canvas" style="max-width:100%; display:none; touch-action: none;"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="tool-filters" class="tool-section">
+            <div class="tool-container">
+                <h1>Image Filters</h1>
+                <div class="scroll-container">
+                    <div class="scroll-text">Enhance your photos with built-in filters. Apply Grayscale, Sepia, Blur, and Contrast effects to give your images a professional look.</div>
+                </div>
+                
+                <div id="filters-privacy-msg" class="privacy-text">⚠️ Privacy Mode: Your photo will be automatically refreshed/cleared in 2 mins after upload!</div>
+
+                <div class="upload-area" id="filters-upload-area">
+                    <div class="upload-btn-wrapper"><button class="btn-main">Select Image</button><input type="file" onchange="loadFilters(this)" accept="image/*"></div>
+                </div>
+                <div class="editor-panel" id="filters-editor-panel">
+                    <div class="controls">
+                        <div class="input-group">
+                            <label>Choose Filter</label>
+                            <select id="filter-select" onchange="applyFilterPreview()">
+                                <option value="none">None</option>
+                                <option value="grayscale(100%)">Black & White</option>
+                                <option value="sepia(100%)">Sepia</option>
+                                <option value="contrast(200%)">High Contrast</option>
+                                <option value="blur(3px)">Blur</option>
+                                <option value="invert(100%)">Invert</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="workspace-box">
+                        <div class="img-wrapper"><img id="filters-preview" src="" style="transition: filter 0.3s;"></div>
+                        <div class="action-buttons-row">
+                            <button class="btn-reupload" onclick="resetTool('filters')">⬆ Re-upload</button>
+                            <button class="btn-action-large" onclick="processFilter()">Apply & Download</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="tool-color" class="tool-section">
+            <div class="tool-container">
+                <h1>Color Picker</h1>
+                <div class="scroll-container">
+                    <div class="scroll-text">Pick any color from your image and get the exact HEX and RGB codes. Useful for designers and developers to match themes.</div>
+                </div>
+                
+                <div id="color-privacy-msg" class="privacy-text">⚠️ Privacy Mode: Your photo will be automatically refreshed/cleared in 2 mins after upload!</div>
+
+                <div class="upload-area" id="color-upload-area">
+                    <div class="upload-btn-wrapper"><button class="btn-main">Select Image</button><input type="file" onchange="loadColor(this)" accept="image/*"></div>
+                </div>
+                <div class="editor-panel" id="color-editor-panel">
+                    <div class="controls">
+                        <div class="input-group"><label>Color Box</label><div id="color-display" class="color-display" style="background-color: #ffffff; width: 60px; height: 60px; border: 4px solid #333;"></div></div>
+                        <div class="input-group"><label>HEX Code</label><input type="text" id="color-hex" value="#FFFFFF" readonly></div>
+                        <div class="input-group"><label>RGB Code</label><input type="text" id="color-rgb" value="rgb(255,255,255)" readonly></div>
+                    </div>
+                    <div class="img-wrapper" style="cursor: crosshair; margin-top:20px;">
+                        <canvas id="color-canvas" style="max-width:100%;"></canvas>
+                    </div>
+                    <button class="btn-reupload" style="margin-top:15px; padding: 8px 15px; font-size: 14px; font-weight: bold; border-radius: 5px;" onclick="resetTool('color')">⬆ Re-upload</button>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <footer class="footer">
+        <div style="margin-bottom: 15px;">
+            <a onclick="showLegalPage('about')" style="color: #3498db; cursor: pointer; margin: 0 10px; text-decoration: none;">About Us</a> |
+            <a onclick="showLegalPage('privacy')" style="color: #3498db; cursor: pointer; margin: 0 10px; text-decoration: none;">Privacy Policy</a> |
+            <a onclick="showLegalPage('contact')" style="color: #3498db; cursor: pointer; margin: 0 10px; text-decoration: none;">Contact Us</a>
+        </div>
+        <p>&copy; 2026 Image Resizer Tools. All Rights Reserved. | Your Privacy is our Priority.</p>
+    </footer>
+
+    <div id="legal-modal" class="modal">
+        <div class="modal-content" style="max-width: 750px; text-align: left; max-height: 85vh; overflow-y: auto;">
+            <span class="close-modal" onclick="closeLegalModal()">&times;</span>
+            <div id="legal-content" style="padding: 20px; color: #333; line-height: 1.6;"></div>
+        </div>
+    </div>
+
+    <div id="login-modal" class="modal"><div class="modal-content"><span class="close-modal" onclick="closeModal('login')">&times;</span><h2>Login</h2><input type="email" class="form-input" placeholder="Email"><input type="password" class="form-input" placeholder="Password"><button class="btn-auth-submit" onclick="simulateAuth('login')">Login</button></div></div>
+    <div id="signup-modal" class="modal"><div class="modal-content"><span class="close-modal" onclick="closeModal('signup')">&times;</span><h2>Sign Up</h2><input type="text" class="form-input" placeholder="Name"><input type="email" class="form-input" placeholder="Email"><input type="password" class="form-input" placeholder="Password"><button class="btn-auth-submit" onclick="simulateAuth('signup')">Sign Up</button></div></div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
+    <script>
+        // --- AUTO REFRESH TIMER LOGIC (CORRECTED) ---
+        let timerStarted = false;
+        function startPrivacyTimer(toolId) {
+            // 1. Show the message for the specific tool immediately
+            const msg = document.getElementById(toolId + '-privacy-msg');
+            if(msg) msg.style.display = 'block';
+
+            // 2. Start the global timer only if it hasn't started yet
+            if(timerStarted) return; 
+            timerStarted = true;
+            
+            setTimeout(() => {
+                alert("Session Expired: Page is refreshing to clear your data for privacy.");
+                location.reload();
+            }, 120000);
+        }
+
+        // --- NAVIGATION LOGIC ---
+        function switchTool(toolName) {
+            document.querySelectorAll('.tool-section').forEach(section => section.classList.remove('active-tool'));
+            document.querySelectorAll('.nav-links a').forEach(link => link.classList.remove('active-link'));
+            document.getElementById('tool-' + toolName).classList.add('active-tool');
+            if(document.getElementById('link-' + toolName)) document.getElementById('link-' + toolName).classList.add('active-link');
+            document.querySelector('.nav-links').classList.remove('nav-active');
+        }
+        document.querySelector('.burger').addEventListener('click', () => document.querySelector('.nav-links').classList.toggle('nav-active'));
+
+        function resetTool(tool) {
+            document.getElementById(tool + '-editor-panel').style.display = 'none';
+            document.getElementById(tool + '-upload-area').style.display = 'flex';
+            resizerRotation = 0;
+        }
+
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024, sizes = ['Bytes', 'KB', 'MB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        // --- AUTH & MODAL ---
+        function openModal(type) { document.getElementById(type + '-modal').style.display = 'flex'; }
+        function closeModal(type) { document.getElementById(type + '-modal').style.display = 'none'; }
+        function simulateAuth(type) {
+            closeModal(type); alert("Successfully " + type + "!");
+            document.getElementById('nav-login-li').style.display = 'none';
+            document.getElementById('nav-signup-li').style.display = 'none';
+            document.getElementById('nav-profile-li').style.display = 'block';
+        }
+
+        // --- GLOBAL VARIABLES ---
+        let uploadedFileType = 'image/jpeg';
+        let originalImage = new Image();
+        let originalRatio = 0;
+        let currentUnit = 'px';
+        let resizerRotation = 0;
+
+        function drawRotated(canvas, image, rotation, width, height) {
+            const ctx = canvas.getContext('2d');
+            if (rotation % 180 !== 0) { canvas.width = height; canvas.height = width; } 
+            else { canvas.width = width; canvas.height = height; }
+            ctx.translate(canvas.width / 2, canvas.height / 2);
+            ctx.rotate(rotation * Math.PI / 180);
+            ctx.drawImage(image, -width / 2, -height / 2, width, height);
+        }
+
+        // --- 1. IMAGE RESIZER ---
+        function loadResizer(input) {
+            if (input.files && input.files[0]) {
+                startPrivacyTimer('resizer'); // Start Timer
+                const file = input.files[0];
+                document.getElementById('original-size-display').innerText = "Original: " + formatBytes(file.size);
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    originalImage.src = e.target.result;
+                    document.getElementById('resizer-preview').src = e.target.result;
+                    document.getElementById('resizer-upload-area').style.display = 'none';
+                    document.getElementById('resizer-editor-panel').style.display = 'block';
+                    originalImage.onload = () => {
+                        originalRatio = originalImage.naturalWidth / originalImage.naturalHeight;
+                        document.getElementById('width-input').value = originalImage.naturalWidth;
+                        document.getElementById('height-input').value = originalImage.naturalHeight;
+                        updateResizerLive();
+                    }
+                }
+                reader.readAsDataURL(file);
+            }
+        }
+
+        function updateResizerLive() {
+            if(!originalImage.src) return;
+            const quality = parseFloat(document.getElementById('resizer-quality').value);
+            document.getElementById('resizer-q-val').innerText = Math.round(quality*100) + '%';
+            const canvas = document.createElement('canvas');
+            let w = parseFloat(document.getElementById('width-input').value) || 1;
+            let h = parseFloat(document.getElementById('height-input').value) || 1;
+            if(currentUnit === '%') {
+                w = Math.round(originalImage.naturalWidth * (w/100));
+                h = Math.round(originalImage.naturalHeight * (h/100));
+            }
+            drawRotated(canvas, originalImage, resizerRotation, w, h);
+            const ctx = canvas.getContext('2d');
+            ctx.globalCompositeOperation = 'destination-over';
+            ctx.fillStyle = "#fff";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            const dataUrl = canvas.toDataURL('image/jpeg', quality);
+            document.getElementById('resizer-output').src = dataUrl;
+            const head = 'data:image/jpeg;base64,';
+            const size = Math.round((dataUrl.length - head.length) * 3 / 4);
+            document.getElementById('resized-size-display').innerText = "New Size: " + formatBytes(size);
+            const link = document.getElementById('resizer-dl'); 
+            link.href = dataUrl; link.style.display = 'inline-block';
+        }
+
+        function toggleUnit() {
+            currentUnit = (currentUnit === 'px') ? '%' : 'px';
+            const toggle = document.getElementById('unit-toggle');
+            if(currentUnit === '%') {
+                toggle.setAttribute('data-state', 'percentage');
+                document.getElementById('btn-percent').classList.add('active');
+                document.getElementById('btn-px').classList.remove('active');
+                document.getElementById('width-input').value = 100;
+                document.getElementById('height-input').value = 100;
+            } else {
+                toggle.setAttribute('data-state', 'pixels');
+                document.getElementById('btn-px').classList.add('active');
+                document.getElementById('btn-percent').classList.remove('active');
+                document.getElementById('width-input').value = originalImage.naturalWidth;
+                document.getElementById('height-input').value = originalImage.naturalHeight;
+            }
+            updateResizerLive();
+        }
+
+        function updateDims(type) {
+            if(currentUnit === '%') return;
+            const val = parseFloat(document.getElementById(type + '-input').value);
+            if(type === 'width') document.getElementById('height-input').value = Math.round(val / originalRatio);
+            else document.getElementById('width-input').value = Math.round(val * originalRatio);
+        }
+        function rotateResizer(deg) { resizerRotation = (resizerRotation + deg) % 360; updateResizerLive(); }
+        function processResize(download) { if(download) document.getElementById('resizer-dl').click(); }
+
+        // --- 2. CROP LOGIC ---
+        let cropper;
+        function loadCropper(input) {
+            if (input.files && input.files[0]) {
+                startPrivacyTimer('crop'); // Start Timer
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const img = document.getElementById('image-to-crop'); img.src = e.target.result;
+                    document.getElementById('crop-upload-area').style.display = 'none';
+                    document.getElementById('crop-editor-panel').style.display = 'block';
+                    if (cropper) cropper.destroy();
+                    cropper = new Cropper(img, { viewMode: 1 });
+                }
+                reader.readAsDataURL(input.files[0]);
+            }
+        }
+        function processCrop() {
+            const canvas = cropper.getCroppedCanvas();
+            const dataUrl = canvas.toDataURL('image/jpeg');
+            document.getElementById('crop-output').src = dataUrl;
+            document.getElementById('crop-result').style.display = 'block';
+            document.getElementById('crop-dl').href = dataUrl;
+        }
+
+        // --- 3. CONVERTER LOGIC ---
+        let convertImg = new Image();
+        function loadConvert(input) {
+            if (input.files && input.files[0]) {
+                startPrivacyTimer('convert'); // Start Timer
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    convertImg.src = e.target.result;
+                    document.getElementById('convert-preview').src = e.target.result;
+                    document.getElementById('convert-upload-area').style.display = 'none';
+                    document.getElementById('convert-editor-panel').style.display = 'block';
+                    convertImg.onload = () => updateConverterLive();
+                }
+                reader.readAsDataURL(input.files[0]);
+            }
+        }
+        function updateConverterLive() {
+            const format = document.getElementById('convert-format').value;
+            const quality = parseFloat(document.getElementById('convert-quality').value);
+            document.getElementById('convert-q-val').innerText = Math.round(quality*100) + '%';
+            const canvas = document.createElement('canvas');
+            canvas.width = convertImg.naturalWidth; canvas.height = convertImg.naturalHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = "#fff"; ctx.fillRect(0,0,canvas.width,canvas.height);
+            ctx.drawImage(convertImg, 0, 0);
+            
+            if(format === 'pdf') {
+                const dataUrl = canvas.toDataURL('image/jpeg', quality);
+                const pdf = new jspdf.jsPDF({ orientation: canvas.width > canvas.height ? 'l' : 'p', unit: 'px', format: [canvas.width, canvas.height] });
+                pdf.addImage(dataUrl, 'JPEG', 0, 0, canvas.width, canvas.height);
+                const blob = pdf.output('blob');
+                document.getElementById('convert-size-display').innerText = "Size: " + formatBytes(blob.size);
+                document.getElementById('convert-dl').href = URL.createObjectURL(blob);
+                document.getElementById('convert-dl').download = "converted.pdf";
+            } else {
+                const dataUrl = canvas.toDataURL('image/' + format, quality);
+                document.getElementById('convert-output').src = dataUrl;
+                const size = Math.round((dataUrl.length - 22) * 3 / 4);
+                document.getElementById('convert-size-display').innerText = "Size: " + formatBytes(size);
+                document.getElementById('convert-dl').href = dataUrl;
+                document.getElementById('convert-dl').download = "converted." + (format === 'jpeg' ? 'jpg' : format);
+            }
+            document.getElementById('convert-dl').style.display = 'inline-block';
+        }
+
+        // --- 4. COMPRESS LOGIC ---
+        let compImg = new Image();
+        function loadCompress(input) {
+            if (input.files && input.files[0]) {
+                startPrivacyTimer('compress'); // Start Timer
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    compImg.src = e.target.result;
+                    document.getElementById('compress-preview').src = e.target.result;
+                    document.getElementById('compress-upload-area').style.display = 'none';
+                    document.getElementById('compress-editor-panel').style.display = 'block';
+                }
+                reader.readAsDataURL(input.files[0]);
+            }
+        }
+        function processCompress() {
+            const quality = parseFloat(document.getElementById('compress-quality').value);
+            const canvas = document.createElement('canvas');
+            canvas.width = compImg.naturalWidth; canvas.height = compImg.naturalHeight;
+            const ctx = canvas.getContext('2d'); ctx.drawImage(compImg, 0, 0);
+            const dataUrl = canvas.toDataURL('image/jpeg', quality);
+            document.getElementById('compress-output').src = dataUrl;
+            document.getElementById('compress-result').style.display = 'block';
+            document.getElementById('compress-size').innerText = "New Size: " + formatBytes(Math.round((dataUrl.length - 22)*3/4));
+            document.getElementById('compress-dl').href = dataUrl;
+        }
+
+        // --- 5. MEME LOGIC ---
+        let mImg = new Image();
+        function loadMeme(input) {
+            if (input.files && input.files[0]) {
+                startPrivacyTimer('meme'); // Start Timer
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    mImg.src = e.target.result;
+                    mImg.onload = () => {
+                        const canvas = document.getElementById('meme-canvas');
+                        canvas.width = mImg.naturalWidth; canvas.height = mImg.naturalHeight;
+                        document.getElementById('meme-upload-area').style.display = 'none';
+                        document.getElementById('meme-editor-panel').style.display = 'block';
+                        canvas.style.display = 'block';
+                        drawMeme();
+                    }
+                }
+                reader.readAsDataURL(input.files[0]);
+            }
+        }
+        function drawMeme() {
+            const canvas = document.getElementById('meme-canvas');
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(mImg, 0, 0);
+            ctx.font = `bold ${canvas.width/10}px Impact`;
+            ctx.fillStyle = 'white'; ctx.strokeStyle = 'black'; ctx.lineWidth = 2; ctx.textAlign = 'center';
+            ctx.fillText(document.getElementById('meme-top').value.toUpperCase(), canvas.width/2, canvas.height*0.15);
+            ctx.strokeText(document.getElementById('meme-top').value.toUpperCase(), canvas.width/2, canvas.height*0.15);
+            ctx.fillText(document.getElementById('meme-bottom').value.toUpperCase(), canvas.width/2, canvas.height*0.95);
+            ctx.strokeText(document.getElementById('meme-bottom').value.toUpperCase(), canvas.width/2, canvas.height*0.95);
+        }
+        function downloadMeme() {
+            const link = document.createElement('a'); link.href = document.getElementById('meme-canvas').toDataURL();
+            link.download = 'meme.jpg'; link.click();
+        }
+
+        // --- 6. FILTERS LOGIC ---
+        function loadFilters(input) {
+            if (input.files && input.files[0]) {
+                startPrivacyTimer('filters'); // Start Timer
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    document.getElementById('filters-preview').src = e.target.result;
+                    document.getElementById('filters-upload-area').style.display = 'none';
+                    document.getElementById('filters-editor-panel').style.display = 'block';
+                }
+                reader.readAsDataURL(input.files[0]);
+            }
+        }
+        function applyFilterPreview() { document.getElementById('filters-preview').style.filter = document.getElementById('filter-select').value; }
+        function processFilter() {
+            const img = document.getElementById('filters-preview');
+            const canvas = document.createElement('canvas');
+            canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
+            const ctx = canvas.getContext('2d'); ctx.filter = document.getElementById('filter-select').value;
+            ctx.drawImage(img, 0, 0);
+            const link = document.createElement('a'); link.href = canvas.toDataURL(); link.download = 'filtered.jpg'; link.click();
+        }
+
+        // --- 7. COLOR PICKER ---
+        function loadColor(input) {
+            if (input.files && input.files[0]) {
+                startPrivacyTimer('color'); // Start Timer
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const img = new Image(); img.src = e.target.result;
+                    img.onload = () => {
+                        const canvas = document.getElementById('color-canvas');
+                        canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
+                        canvas.getContext('2d').drawImage(img, 0, 0);
+                        document.getElementById('color-upload-area').style.display = 'none';
+                        document.getElementById('color-editor-panel').style.display = 'block';
+                    }
+                }
+                reader.readAsDataURL(input.files[0]);
+            }
+        }
+        document.getElementById('color-canvas').addEventListener('click', function(e) {
+            const ctx = this.getContext('2d');
+            const rect = this.getBoundingClientRect();
+            const x = (e.clientX - rect.left) * (this.width / rect.width);
+            const y = (e.clientY - rect.top) * (this.height / rect.height);
+            const p = ctx.getImageData(x, y, 1, 1).data;
+            const hex = "#" + ("000000" + ((p[0] << 16) | (p[1] << 8) | p[2]).toString(16)).slice(-6).toUpperCase();
+            document.getElementById('color-display').style.backgroundColor = hex;
+            document.getElementById('color-hex').value = hex;
+            document.getElementById('color-rgb').value = `rgb(${p[0]},${p[1]},${p[2]})`;
+        });
+
+        // --- LEGAL PAGES LOGIC ---
+        function showLegalPage(type) {
+            const modal = document.getElementById('legal-modal');
+            const content = document.getElementById('legal-content');
+            
+            let html = "";
+            if(type === 'about') {
+                html = `<h2>About Us</h2><hr><br>
+                        <p>Welcome to <b>Image Resizer Tools</b>. We provide high-quality, free online image editing tools. Our platform allows you to resize, crop, and convert images instantly without any software installation.</p>
+                        <p>Our tools are built with speed and privacy in mind. All image processing happens in your browser, so your photos never leave your device. We aim to help students, developers, and designers with quick image tasks.</p>`;
+            } else if(type === 'privacy') {
+                html = `<h2>Privacy Policy</h2><hr><br>
+                        <p>Your privacy is very important to us. Here is how we handle data:</p>
+                        <ul>
+                            <li><b>No Server Uploads:</b> All image editing is done locally in your browser. We do not store or see your images.</li>
+                            <li><b>Cookies:</b> We use Google AdSense to show ads, which may use cookies to serve personalized content.</li>
+                            <li><b>Analytics:</b> We may use tools to track website traffic to improve our user experience.</li>
+                        </ul>`;
+            } else if(type === 'contact') {
+                html = `<h2>Contact Us</h2><hr><br>
+                        <p>Have questions, feedback, or a business inquiry? We'd love to hear from you!</p>
+                        <p><b>Email:</b> support@imageresizertools.com</p>
+                        <p><b>Working Hours:</b> Monday - Friday (10:00 AM to 6:00 PM)</p>
+                        <p>We usually respond within 24-48 hours.</p>`;
+            }
+            
+            content.innerHTML = html;
+            modal.style.display = 'flex';
+        }
+
+        function closeLegalModal() {
+            document.getElementById('legal-modal').style.display = 'none';
+        }
+
+        window.onclick = function(event) {
+            const modal = document.getElementById('legal-modal');
+            if (event.target == modal) {
+                modal.style.display = "none";
+            }
+        }
+    </script>
+</body>
+</html>	

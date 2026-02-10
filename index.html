@@ -7,9 +7,7 @@
     <title>Free Online Image Resizer | Crop, Compress & Convert to JPG/PNG/PDF</title>
     
     <meta name="description" content="Best free online image resizer tool. Resize, crop, compress, and convert images to JPG, PNG, WEBP, or PDF. Create memes and apply filters instantly. No signup required. Fast and secure.">
-    
     <meta name="keywords" content="image resizer, online photo editor, resize image in kb, image converter, jpg to pdf, png to jpg, reduce image size, crop photo online, image compressor, meme generator, photo filters, free image tools, toolstations, image resizer tool, compress jpeg to 100kb, photo size reducer">
-
     <meta name="author" content="ToolStations">
     <meta name="robots" content="index, follow">
 
@@ -527,14 +525,12 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
     <script>
-        // --- AUTO REFRESH TIMER LOGIC (CORRECTED) ---
+        // --- AUTO REFRESH TIMER LOGIC ---
         let timerStarted = false;
         function startPrivacyTimer(toolId) {
-            // 1. Show the message for the specific tool immediately
             const msg = document.getElementById(toolId + '-privacy-msg');
             if(msg) msg.style.display = 'block';
 
-            // 2. Start the global timer only if it hasn't started yet
             if(timerStarted) return; 
             timerStarted = true;
             
@@ -558,6 +554,7 @@
             document.getElementById(tool + '-editor-panel').style.display = 'none';
             document.getElementById(tool + '-upload-area').style.display = 'flex';
             resizerRotation = 0;
+            if(typeof converterRotation !== 'undefined') converterRotation = 0;
         }
 
         function formatBytes(bytes) {
@@ -577,8 +574,7 @@
             document.getElementById('nav-profile-li').style.display = 'block';
         }
 
-        // --- GLOBAL VARIABLES ---
-        let uploadedFileType = 'image/jpeg';
+        // --- GLOBAL VARIABLES & HELPERS ---
         let originalImage = new Image();
         let originalRatio = 0;
         let currentUnit = 'px';
@@ -596,7 +592,7 @@
         // --- 1. IMAGE RESIZER ---
         function loadResizer(input) {
             if (input.files && input.files[0]) {
-                startPrivacyTimer('resizer'); // Start Timer
+                startPrivacyTimer('resizer');
                 const file = input.files[0];
                 document.getElementById('original-size-display').innerText = "Original: " + formatBytes(file.size);
                 const reader = new FileReader();
@@ -629,9 +625,13 @@
             }
             drawRotated(canvas, originalImage, resizerRotation, w, h);
             const ctx = canvas.getContext('2d');
+            
+            // Fix for Resizer Background
+            ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset transform before filling background
             ctx.globalCompositeOperation = 'destination-over';
             ctx.fillStyle = "#fff";
             ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
             const dataUrl = canvas.toDataURL('image/jpeg', quality);
             document.getElementById('resizer-output').src = dataUrl;
             const head = 'data:image/jpeg;base64,';
@@ -673,7 +673,7 @@
         let cropper;
         function loadCropper(input) {
             if (input.files && input.files[0]) {
-                startPrivacyTimer('crop'); // Start Timer
+                startPrivacyTimer('crop');
                 const reader = new FileReader();
                 reader.onload = (e) => {
                     const img = document.getElementById('image-to-crop'); img.src = e.target.result;
@@ -693,31 +693,49 @@
             document.getElementById('crop-dl').href = dataUrl;
         }
 
-        // --- 3. CONVERTER LOGIC ---
+        // --- 3. CONVERTER LOGIC (FIXED) ---
         let convertImg = new Image();
+        let converterRotation = 0;
+
         function loadConvert(input) {
             if (input.files && input.files[0]) {
-                startPrivacyTimer('convert'); // Start Timer
+                startPrivacyTimer('convert'); 
                 const reader = new FileReader();
                 reader.onload = (e) => {
                     convertImg.src = e.target.result;
                     document.getElementById('convert-preview').src = e.target.result;
                     document.getElementById('convert-upload-area').style.display = 'none';
                     document.getElementById('convert-editor-panel').style.display = 'block';
+                    converterRotation = 0; 
                     convertImg.onload = () => updateConverterLive();
                 }
                 reader.readAsDataURL(input.files[0]);
             }
         }
+
+        function rotateConverter(deg) {
+            converterRotation = (converterRotation + deg) % 360;
+            updateConverterLive();
+        }
+
         function updateConverterLive() {
             const format = document.getElementById('convert-format').value;
             const quality = parseFloat(document.getElementById('convert-quality').value);
             document.getElementById('convert-q-val').innerText = Math.round(quality*100) + '%';
+            
             const canvas = document.createElement('canvas');
-            canvas.width = convertImg.naturalWidth; canvas.height = convertImg.naturalHeight;
+            
+            // Draw image first (sets rotation & size)
+            drawRotated(canvas, convertImg, converterRotation, convertImg.naturalWidth, convertImg.naturalHeight);
+            
             const ctx = canvas.getContext('2d');
-            ctx.fillStyle = "#fff"; ctx.fillRect(0,0,canvas.width,canvas.height);
-            ctx.drawImage(convertImg, 0, 0);
+            
+            // *** CRITICAL FIX: Reset Transform before filling background ***
+            ctx.setTransform(1, 0, 0, 1, 0, 0); 
+            
+            ctx.globalCompositeOperation = 'destination-over';
+            ctx.fillStyle = "#fff"; 
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
             
             if(format === 'pdf') {
                 const dataUrl = canvas.toDataURL('image/jpeg', quality);
@@ -742,7 +760,7 @@
         let compImg = new Image();
         function loadCompress(input) {
             if (input.files && input.files[0]) {
-                startPrivacyTimer('compress'); // Start Timer
+                startPrivacyTimer('compress');
                 const reader = new FileReader();
                 reader.onload = (e) => {
                     compImg.src = e.target.result;
@@ -765,46 +783,148 @@
             document.getElementById('compress-dl').href = dataUrl;
         }
 
-        // --- 5. MEME LOGIC ---
+        // --- 5. MEME LOGIC (DRAGGABLE TEXT) ---
         let mImg = new Image();
+        let memeCanvas, memeCtx;
+        // Text positions
+        let memeTexts = {
+            top: { x: 0, y: 0, text: "" },
+            bottom: { x: 0, y: 0, text: "" }
+        };
+        let draggingText = null; // 'top' or 'bottom'
+
         function loadMeme(input) {
             if (input.files && input.files[0]) {
-                startPrivacyTimer('meme'); // Start Timer
+                startPrivacyTimer('meme');
                 const reader = new FileReader();
                 reader.onload = (e) => {
                     mImg.src = e.target.result;
                     mImg.onload = () => {
-                        const canvas = document.getElementById('meme-canvas');
-                        canvas.width = mImg.naturalWidth; canvas.height = mImg.naturalHeight;
+                        memeCanvas = document.getElementById('meme-canvas');
+                        memeCtx = memeCanvas.getContext('2d');
+                        memeCanvas.width = mImg.naturalWidth; 
+                        memeCanvas.height = mImg.naturalHeight;
+                        
+                        // Default Positions
+                        memeTexts.top.x = memeCanvas.width / 2;
+                        memeTexts.top.y = memeCanvas.height * 0.15;
+                        memeTexts.bottom.x = memeCanvas.width / 2;
+                        memeTexts.bottom.y = memeCanvas.height * 0.95;
+
                         document.getElementById('meme-upload-area').style.display = 'none';
                         document.getElementById('meme-editor-panel').style.display = 'block';
-                        canvas.style.display = 'block';
+                        memeCanvas.style.display = 'block';
                         drawMeme();
+                        initMemeDrag();
                     }
                 }
                 reader.readAsDataURL(input.files[0]);
             }
         }
+
         function drawMeme() {
-            const canvas = document.getElementById('meme-canvas');
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(mImg, 0, 0);
-            ctx.font = `bold ${canvas.width/10}px Impact`;
-            ctx.fillStyle = 'white'; ctx.strokeStyle = 'black'; ctx.lineWidth = 2; ctx.textAlign = 'center';
-            ctx.fillText(document.getElementById('meme-top').value.toUpperCase(), canvas.width/2, canvas.height*0.15);
-            ctx.strokeText(document.getElementById('meme-top').value.toUpperCase(), canvas.width/2, canvas.height*0.15);
-            ctx.fillText(document.getElementById('meme-bottom').value.toUpperCase(), canvas.width/2, canvas.height*0.95);
-            ctx.strokeText(document.getElementById('meme-bottom').value.toUpperCase(), canvas.width/2, canvas.height*0.95);
+            if(!memeCtx) return;
+            // Clear & Draw Image
+            memeCtx.clearRect(0, 0, memeCanvas.width, memeCanvas.height);
+            memeCtx.drawImage(mImg, 0, 0);
+
+            // Update Text Values from Inputs
+            memeTexts.top.text = document.getElementById('meme-top').value.toUpperCase();
+            memeTexts.bottom.text = document.getElementById('meme-bottom').value.toUpperCase();
+
+            // Font Settings
+            const fontSize = memeCanvas.width / 10;
+            memeCtx.font = `bold ${fontSize}px Impact`;
+            memeCtx.fillStyle = 'white'; 
+            memeCtx.strokeStyle = 'black'; 
+            memeCtx.lineWidth = fontSize / 15; 
+            memeCtx.textAlign = 'center';
+            memeCtx.textBaseline = 'middle'; 
+
+            // Draw Top Text
+            if(memeTexts.top.text) {
+                memeCtx.fillText(memeTexts.top.text, memeTexts.top.x, memeTexts.top.y);
+                memeCtx.strokeText(memeTexts.top.text, memeTexts.top.x, memeTexts.top.y);
+            }
+
+            // Draw Bottom Text
+            if(memeTexts.bottom.text) {
+                memeCtx.fillText(memeTexts.bottom.text, memeTexts.bottom.x, memeTexts.bottom.y);
+                memeCtx.strokeText(memeTexts.bottom.text, memeTexts.bottom.x, memeTexts.bottom.y);
+            }
         }
+
+        function initMemeDrag() {
+            const events = ['mousedown', 'touchstart'];
+            const moveEvents = ['mousemove', 'touchmove'];
+            const endEvents = ['mouseup', 'touchend', 'mouseleave'];
+
+            // START DRAG
+            events.forEach(evt => memeCanvas.addEventListener(evt, (e) => {
+                e.preventDefault();
+                const pos = getMousePos(e);
+                const fontSize = memeCanvas.width / 10;
+                
+                // Simple Hit Detection
+                if (isHit(pos, memeTexts.top, fontSize)) {
+                    draggingText = 'top';
+                } else if (isHit(pos, memeTexts.bottom, fontSize)) {
+                    draggingText = 'bottom';
+                }
+            }));
+
+            // MOVING
+            moveEvents.forEach(evt => memeCanvas.addEventListener(evt, (e) => {
+                e.preventDefault();
+                if (draggingText) {
+                    const pos = getMousePos(e);
+                    memeTexts[draggingText].x = pos.x;
+                    memeTexts[draggingText].y = pos.y;
+                    drawMeme();
+                }
+            }));
+
+            // END DRAG
+            endEvents.forEach(evt => memeCanvas.addEventListener(evt, () => {
+                draggingText = null;
+            }));
+        }
+
+        function getMousePos(evt) {
+            const rect = memeCanvas.getBoundingClientRect();
+            let clientX = evt.clientX;
+            let clientY = evt.clientY;
+            
+            if(evt.touches && evt.touches.length > 0) {
+                clientX = evt.touches[0].clientX;
+                clientY = evt.touches[0].clientY;
+            }
+
+            return {
+                x: (clientX - rect.left) * (memeCanvas.width / rect.width),
+                y: (clientY - rect.top) * (memeCanvas.height / rect.height)
+            };
+        }
+
+        function isHit(pos, textObj, fontSize) {
+            if(!textObj.text) return false;
+            const textWidth = textObj.text.length * (fontSize * 0.5); 
+            const dx = Math.abs(pos.x - textObj.x);
+            const dy = Math.abs(pos.y - textObj.y);
+            return (dx < textWidth / 1.5 && dy < fontSize / 1.5);
+        }
+
         function downloadMeme() {
-            const link = document.createElement('a'); link.href = document.getElementById('meme-canvas').toDataURL();
-            link.download = 'meme.jpg'; link.click();
+            const link = document.createElement('a'); 
+            link.href = memeCanvas.toDataURL();
+            link.download = 'meme.jpg'; 
+            link.click();
         }
 
         // --- 6. FILTERS LOGIC ---
         function loadFilters(input) {
             if (input.files && input.files[0]) {
-                startPrivacyTimer('filters'); // Start Timer
+                startPrivacyTimer('filters');
                 const reader = new FileReader();
                 reader.onload = (e) => {
                     document.getElementById('filters-preview').src = e.target.result;
@@ -824,10 +944,10 @@
             const link = document.createElement('a'); link.href = canvas.toDataURL(); link.download = 'filtered.jpg'; link.click();
         }
 
-        // --- 7. COLOR PICKER ---
+        // --- 7. COLOR PICKER (HOVER) ---
         function loadColor(input) {
             if (input.files && input.files[0]) {
-                startPrivacyTimer('color'); // Start Timer
+                startPrivacyTimer('color'); 
                 const reader = new FileReader();
                 reader.onload = (e) => {
                     const img = new Image(); img.src = e.target.result;
@@ -842,17 +962,41 @@
                 reader.readAsDataURL(input.files[0]);
             }
         }
-        document.getElementById('color-canvas').addEventListener('click', function(e) {
-            const ctx = this.getContext('2d');
-            const rect = this.getBoundingClientRect();
-            const x = (e.clientX - rect.left) * (this.width / rect.width);
-            const y = (e.clientY - rect.top) * (this.height / rect.height);
+
+        function pickColorLogic(e) {
+            const canvas = document.getElementById('color-canvas');
+            const ctx = canvas.getContext('2d');
+            const rect = canvas.getBoundingClientRect();
+            
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+
+            let clientX = e.clientX;
+            let clientY = e.clientY;
+            
+            if(e.touches && e.touches.length > 0) {
+                clientX = e.touches[0].clientX;
+                clientY = e.touches[0].clientY;
+            }
+
+            const x = (clientX - rect.left) * scaleX;
+            const y = (clientY - rect.top) * scaleY;
+
+            if(x < 0 || x > canvas.width || y < 0 || y > canvas.height) return;
+
             const p = ctx.getImageData(x, y, 1, 1).data;
             const hex = "#" + ("000000" + ((p[0] << 16) | (p[1] << 8) | p[2]).toString(16)).slice(-6).toUpperCase();
+            
             document.getElementById('color-display').style.backgroundColor = hex;
             document.getElementById('color-hex').value = hex;
             document.getElementById('color-rgb').value = `rgb(${p[0]},${p[1]},${p[2]})`;
-        });
+        }
+
+        const colorCanvas = document.getElementById('color-canvas');
+        colorCanvas.addEventListener('click', pickColorLogic);
+        colorCanvas.addEventListener('mousemove', pickColorLogic);
+        colorCanvas.addEventListener('touchmove', (e) => { e.preventDefault(); pickColorLogic(e); });
+
 
         // --- LEGAL PAGES LOGIC ---
         function showLegalPage(type) {
@@ -896,5 +1040,4 @@
         }
     </script>
 </body>
-</html>	
-
+</html>
